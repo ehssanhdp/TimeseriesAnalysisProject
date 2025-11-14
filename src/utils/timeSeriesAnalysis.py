@@ -32,7 +32,8 @@ def calculate_autocorrelation(data: List[float], lag: int) -> float:
 
     data_mean = mean(data)
 
-    numerator = sum((data[i] - data_mean) * (data[i + lag] - data_mean) for i in range(n - lag))
+    numerator = sum((data[i] - data_mean) *
+                    (data[i + lag] - data_mean) for i in range(n - lag))
     denominator = sum((data[i] - data_mean) ** 2 for i in range(n))
 
     return numerator / denominator if denominator != 0 else 0
@@ -46,7 +47,8 @@ def calculate_trend_coefficient(data: List[float]) -> float:
     mean_x = mean(indices)
     mean_y = mean(data)
 
-    numerator = sum((indices[i] - mean_x) * (data[i] - mean_y) for i in range(n))
+    numerator = sum((indices[i] - mean_x) * (data[i] - mean_y)
+                    for i in range(n))
     denominator = sum((indices[i] - mean_x) ** 2 for i in range(n))
 
     return numerator / denominator if denominator != 0 else 0
@@ -108,3 +110,39 @@ def _is_numeric(s: str) -> bool:
     except ValueError:
         return False
 
+
+def calculate_difference(data: List[float]) -> List[float]:
+    """Calculate first difference: Y_t = X_t - X_(t-1)"""
+    if len(data) < 2:
+        return []
+
+    return [data[i] - data[i - 1] for i in range(1, len(data))]
+
+
+def generate_ma1(n_samples: int, phi_1: float, variance: float) -> List[float]:
+    """
+    Generate MA(1) time series: X_t = phi_1 * Eps_(t-1) + Eps_t
+    where Eps ~ N(0, variance)
+
+    Args:
+        n_samples: Number of samples to generate
+        phi_1: MA(1) coefficient
+        variance: Variance of the normal distribution
+
+    Returns:
+        List of generated MA(1) values
+    """
+    import random
+    import math
+
+    # Generate white noise samples: Eps ~ N(0, variance)
+    std_dev = math.sqrt(variance)
+    epsilon = [random.gauss(0, std_dev) for _ in range(n_samples + 1)]
+
+    # Generate MA(1) process: X_t = phi_1 * Eps_(t-1) + Eps_t
+    ma1_series = []
+    for t in range(1, n_samples + 1):
+        x_t = phi_1 * epsilon[t - 1] + epsilon[t]
+        ma1_series.append(x_t)
+
+    return ma1_series

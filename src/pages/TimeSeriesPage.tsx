@@ -1,17 +1,21 @@
-import { useState, useEffect } from "react";
-import { Moon, Sun } from "lucide-react";
-import { Button } from "./components/ui/button";
-import FileUploadArea from "./components/FileUploadArea";
-import AnalysisControls from "./components/AnalysisControls";
-import ResultsDisplay from "./components/ResultsDisplay";
-import TimeSeriesChart from "./components/TimeSeriesChart";
-import type { TimeSeriesData, AnalysisResults } from "./utils/types";
+import { useState } from "react";
+import { useOutletContext } from "react-router-dom";
+import FileUploadArea from "../components/FileUploadArea";
+import AnalysisControls from "../components/AnalysisControls";
+import ResultsDisplay from "../components/ResultsDisplay";
+import TimeSeriesChart from "../components/TimeSeriesChart";
+import { Button } from "../components/ui/button";
+import type { TimeSeriesData, AnalysisResults } from "../utils/types";
 import * as XLSX from "xlsx";
 
 const API_BASE_URL = "http://localhost:5000/api";
 
-export default function App() {
-  const [isDarkMode, setIsDarkMode] = useState(false);
+interface ContextType {
+  isDarkMode: boolean;
+}
+
+export default function TimeSeriesPage() {
+  const { isDarkMode } = useOutletContext<ContextType>();
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [timeSeriesData, setTimeSeriesData] = useState<TimeSeriesData | null>(
     null
@@ -25,14 +29,6 @@ export default function App() {
   const [differencedResults, setDifferencedResults] =
     useState<AnalysisResults | null>(null);
   const [isDifferencing, setIsDifferencing] = useState(false);
-
-  useEffect(() => {
-    if (isDarkMode) {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
-  }, [isDarkMode]);
 
   const handleFileUpload = async (file: File) => {
     setUploadedFile(file);
@@ -54,7 +50,6 @@ export default function App() {
         throw new Error("فرمت فایل پشتیبانی نمی‌شود");
       }
 
-      // Call Python API to parse CSV
       const response = await fetch(`${API_BASE_URL}/parse-csv`, {
         method: "POST",
         headers: {
@@ -81,7 +76,6 @@ export default function App() {
     setIsCalculating(true);
 
     try {
-      // Call Python API to analyze time series
       const response = await fetch(`${API_BASE_URL}/analyze`, {
         method: "POST",
         headers: {
@@ -96,7 +90,6 @@ export default function App() {
 
       const results: AnalysisResults = await response.json();
 
-      // Fetch AI feedback
       try {
         const aiResponse = await fetch(`${API_BASE_URL}/ai-feedback`, {
           method: "POST",
@@ -115,7 +108,6 @@ export default function App() {
         }
       } catch (aiError) {
         console.error("Error fetching AI feedback:", aiError);
-        // Don't fail the whole operation if AI feedback fails
       }
 
       setAnalysisResults(results);
@@ -160,46 +152,9 @@ export default function App() {
   };
 
   return (
-    <div
-      dir="rtl"
-      className={`min-h-screen transition-colors duration-200 ${
-        isDarkMode ? "bg-gray-900" : "bg-white"
-      }`}
-    >
-      {/* Header */}
-      <header
-        className={`
-        border-b transition-colors duration-200
-        ${
-          isDarkMode
-            ? "border-gray-800 bg-gray-900"
-            : "border-gray-200 bg-white"
-        }
-      `}
-      >
-        <div className="max-w-7xl mx-auto px-6 py-6 flex justify-between items-center">
-          <h1 className={`${isDarkMode ? "text-white" : "text-gray-900"}`}>
-            KNTU Time series analysis
-          </h1>
-          <Button
-            onClick={() => setIsDarkMode(!isDarkMode)}
-            variant="ghost"
-            size="icon"
-            className="rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
-          >
-            {isDarkMode ? (
-              <Sun className="w-5 h-5 text-gray-400" />
-            ) : (
-              <Moon className="w-5 h-5 text-gray-600" />
-            )}
-          </Button>
-        </div>
-      </header>
-
-      {/* Main Content */}
+    <>
       <main className="max-w-7xl mx-auto px-6 py-12">
         <div className="space-y-12">
-          {/* Upload Area */}
           {!uploadedFile && (
             <FileUploadArea
               onFileUpload={handleFileUpload}
@@ -207,7 +162,6 @@ export default function App() {
             />
           )}
 
-          {/* File Info */}
           {uploadedFile && (
             <div
               className={`
@@ -244,7 +198,6 @@ export default function App() {
             </div>
           )}
 
-          {/* Chart - Always show if data is available */}
           {timeSeriesData && (
             <TimeSeriesChart
               data={timeSeriesData}
@@ -253,7 +206,6 @@ export default function App() {
             />
           )}
 
-          {/* Analysis Controls */}
           {timeSeriesData && !analysisResults && (
             <AnalysisControls
               onCalculate={handleCalculate}
@@ -262,7 +214,6 @@ export default function App() {
             />
           )}
 
-          {/* Results */}
           {analysisResults && (
             <>
               <ResultsDisplay
@@ -303,7 +254,6 @@ export default function App() {
             </>
           )}
 
-          {/* Differenced Data Section */}
           {differencedData && differencedResults && (
             <>
               <div
@@ -333,7 +283,6 @@ export default function App() {
         </div>
       </main>
 
-      {/* Footer */}
       <footer
         className={`
         border-t mt-24 transition-colors duration-200
@@ -354,6 +303,6 @@ export default function App() {
           </p>
         </div>
       </footer>
-    </div>
+    </>
   );
 }
