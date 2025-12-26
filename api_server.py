@@ -20,7 +20,9 @@ from timeSeriesAnalysis import (
     calculate_difference,
     generate_ma1,
     TimeSeriesData,
-    AnalysisResults
+    AnalysisResults,
+    estimate_ma_mme,
+    estimate_ma_mse
 )
 from AI_engine import get_ai_feedback
 
@@ -129,6 +131,40 @@ def generate_ma_endpoint():
             'values': ma1_values,
             'labels': labels
         })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/estimate-ma-parameters', methods=['POST'])
+def estimate_ma_parameters_endpoint():
+    """Estimate MA parameters"""
+    try:
+        data = request.get_json()
+        values = data.get('values', [])
+        max_order = data.get('order', 3)
+
+        if not values:
+            return jsonify({
+                'error': 'No values provided'
+            }), 400
+
+        if not isinstance(max_order, int) or max_order < 1:
+            return jsonify({
+                'error': 'Order must be a positive integer'
+            }), 400
+
+        mme_results = {
+            f'ma{k}': estimate_ma_mme(values, order=k) for k in range(1, max_order + 1)
+        }
+        mse_results = {
+            f'ma{k}': estimate_ma_mse(values, order=k) for k in range(1, max_order + 1)
+        }
+
+        return jsonify({
+            'mme': mme_results,
+            'mse': mse_results
+        })
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

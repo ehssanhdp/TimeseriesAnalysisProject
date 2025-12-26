@@ -1,6 +1,8 @@
 # Time Series Analysis Utilities
 
 from typing import TypedDict, List
+from scipy.optimize import fsolve, minimize
+import numpy as np
 
 
 class TimeSeriesData(TypedDict):
@@ -146,3 +148,99 @@ def generate_ma1(n_samples: int, phi_1: float, variance: float) -> List[float]:
         ma1_series.append(x_t)
 
     return ma1_series
+
+
+def estimate_ma_mme(values: List[float], order: int) -> dict:
+    """
+    Estimates MA(q) parameters for order q using Method of Moments.
+    """
+
+    if order < 1:
+        return {"error": "Order must be at least 1"}
+
+    # Calculate sample autocorrelations
+    r_sample = [calculate_autocorrelation(values, k) for k in range(1, order + 1)]
+
+    # Define the system of equations
+    def equations(params):
+        phis = [1.0] + list(params)
+
+        # Common denom: 1 + sum of phi_i^2 for i=0 to q
+        denom = sum(p ** 2 for p in phis)
+
+        residuals = []
+        # Calculate theoretical rho for each lag
+        for k in range(1, order + 1):
+            # Numerator for lag k: sum(phi_i * phi_{i+k})
+            numerator = 0.0
+            for j in range(order - k + 1):
+                numerator += phis[j] * phis[j + k]
+            rho_theoretical = numerator / denom
+
+            residuals.append(rho_theoretical - r_sample[k - 1])
+
+        return residuals
+
+    # Solve numerically with initial guess of 0.1 for all phis
+    initial_guess = [0.1] * order
+    phi_solution = fsolve(equations, initial_guess)
+
+    result = {}
+    for i in range(order):
+        result[f"phi{i + 1}"] = round(float(phi_solution[i]), 5)
+
+    return result
+
+
+def estimate_ma_mse(values: List[float], order: int) -> dict:
+    """
+    Estimates MA(q) parameters by minimizing Mean Squared Error (SSE).
+    Assumption: Mean is zero.
+    Model: X_t = e_t + phi_1*e_{t-1} + ... + phi_q*e_{t-q}
+    """
+
+    if order < 1:
+        return {"error": "Order must be at least 1"}
+
+    series = np.array(values, dtype=float)
+    n = len(series)
+
+    # Initial guess for phis
+    initial_guess = [0.1] * order
+
+    def css_objective_zero_mean(phis):
+        errors = np.zeros(n)
+        sse = 0.0
+
+        for t in range(n):
+            # Calculate MA part: sum(phi_j * e_{t-(j+1)})
+            ma_part = 0.0
+            for j in range(order):
+                lag_index = t - (j + 1)
+                if lag_index >= 0:
+                    ma_part += phis[j] * errors[lag_index]
+
+            # e_t = X_t - MA_part
+            errors[t] = series[t] - ma_part
+            sse += errors[t] ** 2
+
+        return sse
+
+    # Phis roughly in (-1, 1)
+    bounds = [(-0.99999, 0.99999)] * order
+    result = minimize(
+        css_objective_zero_mean,
+        initial_guess,
+        bounds=bounds
+    )
+
+    # Format results
+    optimized_phis = result.x
+    output = {}
+    for i, val in enumerate(optimized_phis):
+        output[f"phi{i + 1}"] = round(float(val), 5)
+    output["mse_value"] = round(float(result.fun / n), 5)
+
+    return output
+
+
