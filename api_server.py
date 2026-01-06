@@ -5,11 +5,11 @@ from flask_cors import CORS
 from flask import Flask, request, jsonify
 import sys
 from pathlib import Path
+import numpy as np
 
 # Add src/utils directory to path
 current_dir = Path(__file__).parent
 sys.path.insert(0, str(current_dir / 'src' / 'utils'))
-
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for React app
@@ -27,10 +27,27 @@ from timeSeriesAnalysis import (
 from AI_engine import get_ai_feedback
 
 
+# --------------------------------------------------
+# Descriptive Statistics
+# --------------------------------------------------
+def calculate_descriptive_statistics(values):
+    """
+    Calculate basic descriptive statistics for time series data
+    """
+    data = np.array(values, dtype=float)
 
+    return {
+        "count": int(data.size),
+        "mean": float(np.mean(data)),
+        "variance": float(np.var(data, ddof=0))
+    }
+
+
+# --------------------------------------------------
+# API Endpoints
+# --------------------------------------------------
 @app.route('/api/parse-csv', methods=['POST'])
 def parse_csv_endpoint():
-    """Parse CSV content"""
     try:
         data = request.get_json()
         content = data.get('content', '')
@@ -46,7 +63,6 @@ def parse_csv_endpoint():
 
 @app.route('/api/analyze', methods=['POST'])
 def analyze_endpoint():
-    """Analyze time series data"""
     try:
         data = request.get_json()
         values = data.get('values', [])
@@ -54,15 +70,36 @@ def analyze_endpoint():
         if not values:
             return jsonify({'error': 'No values provided'}), 400
 
-        result = analyze_time_series(values)
-        return jsonify(result)
+        analysis = analyze_time_series(values)
+        descriptive_stats = calculate_descriptive_statistics(values)
+
+        return jsonify({
+            "analysis": analysis,
+            "descriptiveStatistics": descriptive_stats
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/descriptive-stats', methods=['POST'])
+def descriptive_stats_endpoint():
+    """Standalone descriptive statistics report"""
+    try:
+        data = request.get_json()
+        values = data.get('values', [])
+
+        if not values:
+            return jsonify({'error': 'No values provided'}), 400
+
+        stats = calculate_descriptive_statistics(values)
+        return jsonify({"descriptiveStatistics": stats})
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/ai-feedback', methods=['POST'])
 def ai_feedback_endpoint():
-    """Get AI feedback for analysis results"""
     try:
         data = request.get_json()
         autocorrelations = data.get('autocorrelations', [])
@@ -79,7 +116,6 @@ def ai_feedback_endpoint():
 
 @app.route('/api/difference', methods=['POST'])
 def difference_endpoint():
-    """Calculate difference and analyze the differenced data"""
     try:
         data = request.get_json()
         values = data.get('values', [])
@@ -88,22 +124,21 @@ def difference_endpoint():
         if not values:
             return jsonify({'error': 'No values provided'}), 400
 
-        # Calculate difference
         differenced_values = calculate_difference(values)
+        differenced_labels = labels[1:] if len(labels) > 1 else [
+            str(i) for i in range(1, len(differenced_values) + 1)
+        ]
 
-        # Adjust labels (remove first label since we lose one data point)
-        differenced_labels = labels[1:] if len(labels) > 1 else [str(
-            i) for i in range(1, len(differenced_values) + 1)]
-
-        # Analyze the differenced data
         analysis_results = analyze_time_series(differenced_values)
+        descriptive_stats = calculate_descriptive_statistics(differenced_values)
 
         return jsonify({
             'data': {
                 'values': differenced_values,
                 'labels': differenced_labels
             },
-            'analysis': analysis_results
+            'analysis': analysis_results,
+            'descriptiveStatistics': descriptive_stats
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -111,7 +146,6 @@ def difference_endpoint():
 
 @app.route('/api/generate-ma', methods=['POST'])
 def generate_ma_endpoint():
-    """Generate MA(1) time series"""
     try:
         data = request.get_json()
         n_samples = data.get('nSamples', 100)
@@ -121,15 +155,15 @@ def generate_ma_endpoint():
         if n_samples <= 0:
             return jsonify({'error': 'Number of samples must be positive'}), 400
 
-        # Generate MA(1) series
         ma1_values = generate_ma1(n_samples, phi_1, variance)
-
-        # Create labels
         labels = [str(i + 1) for i in range(len(ma1_values))]
+
+        descriptive_stats = calculate_descriptive_statistics(ma1_values)
 
         return jsonify({
             'values': ma1_values,
-            'labels': labels
+            'labels': labels,
+            'descriptiveStatistics': descriptive_stats
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -137,27 +171,24 @@ def generate_ma_endpoint():
 
 @app.route('/api/estimate-ma-parameters', methods=['POST'])
 def estimate_ma_parameters_endpoint():
-    """Estimate MA parameters"""
     try:
         data = request.get_json()
         values = data.get('values', [])
         max_order = data.get('order', 3)
 
         if not values:
-            return jsonify({
-                'error': 'No values provided'
-            }), 400
+            return jsonify({'error': 'No values provided'}), 400
 
         if not isinstance(max_order, int) or max_order < 1:
-            return jsonify({
-                'error': 'Order must be a positive integer'
-            }), 400
+            return jsonify({'error': 'Order must be a positive integer'}), 400
 
         mme_results = {
-            f'ma{k}': estimate_ma_mme(values, order=k) for k in range(1, max_order + 1)
+            f'ma{k}': estimate_ma_mme(values, order=k)
+            for k in range(1, max_order + 1)
         }
         mse_results = {
-            f'ma{k}': estimate_ma_mse(values, order=k) for k in range(1, max_order + 1)
+            f'ma{k}': estimate_ma_mse(values, order=k)
+            for k in range(1, max_order + 1)
         }
 
         return jsonify({
@@ -171,7 +202,6 @@ def estimate_ma_parameters_endpoint():
 
 @app.route('/api/health', methods=['GET'])
 def health():
-    """Health check endpoint"""
     return jsonify({'status': 'ok'})
 
 
